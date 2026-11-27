@@ -1,0 +1,18 @@
+{
+  "name": "inventoryrd-react-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host localhost --port 3000",
+    "build": "vite build",
+    "preview": "vite preview --host localhost --port 3000"
+  },
+  "dependencies": {
+    "@vitejs/plugin-basic-ssl": "2.3.0",
+    "@vitejs/plugin-react": "6.0.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vite": "8.4.0"
+  }
+}
