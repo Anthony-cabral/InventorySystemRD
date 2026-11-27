@@ -1,0 +1,14 @@
+@InventoryRD_API_HostAddress = https://localhost:7080
+
+GET {{InventoryRD_API_HostAddress}}/api/categories
+Accept: application/json
+
+###
+
+GET {{InventoryRD_API_HostAddress}}/api/suppliers
+Accept: application/json
+
+###
+
+GET {{InventoryRD_API_HostAddress}}/api/products?isActive=true
+Accept: application/json
