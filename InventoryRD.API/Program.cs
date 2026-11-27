@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using InventoryRD.Application.Contract;
+using InventoryRD.Application.Services;
 using InventoryRD.Infrastructure.Context;
 using InventoryRD.Infrastructure.Interfaces;
 using InventoryRD.Infrastructure.Repositories;
@@ -11,6 +13,9 @@ builder.Services.AddDbContext<DataContext>(options =>
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 
 builder.Services.AddControllers();
 
