@@ -6,7 +6,8 @@ const pages = {
   home: "Inicio",
   products: "Productos",
   categories: "Categorías",
-  suppliers: "Proveedores"
+  suppliers: "Proveedores",
+  movements: "Movimientos de inventario"
 };
 
 const names = { products: "producto", categories: "categoría", suppliers: "proveedor" };
@@ -29,6 +30,14 @@ const errorMessages = {
   "The selected product was not found.": "No se encontró el producto seleccionado.",
   "The selected category or supplier no longer exists.": "La categoría o el proveedor ya no están disponibles.",
   "The stock cannot be negative.": "Las existencias no pueden ser negativas.",
+  "The exit quantity exceeds the available stock.": "La salida supera las existencias disponibles.",
+  "The resulting stock exceeds the maximum supported quantity.": "Las existencias superarían la cantidad máxima.",
+  "The movement quantity must be greater than zero.": "Ingresa una cantidad mayor que cero.",
+  "The movement type must be Entry or Exit.": "Selecciona una entrada o una salida.",
+  "You need to select a product.": "Selecciona un producto.",
+  "The product has inventory movements.": "El producto tiene movimientos de inventario.",
+  "The product changed during this operation. Try again.": "El producto cambió. Vuelve a intentarlo.",
+  "Stock can only be changed through inventory movements.": "Actualiza las existencias desde Movimientos de inventario.",
   "A price between zero and 9999999999999999.99 with up to two decimal places is required.": "Ingresa un precio válido con hasta dos decimales."
 };
 
@@ -129,7 +138,7 @@ function CatalogForm({ view, form, setForm, categories, suppliers, onSave, onCan
         </>}
         {view === "products" && <>
           <label>Precio<input name="price" type="number" min="0" step="0.01" value={form.price} onChange={set} required /></label>
-          <label>Existencias<input name="stock" type="number" min="0" max="2147483647" step="1" value={form.stock} onChange={set} required /></label>
+          <label>Existencias<input name="stock" type="number" min="0" max="2147483647" step="1" value={form.stock} onChange={set} readOnly={Boolean(form.id)} required /></label>
           <label>Categoría
             <select name="categoryId" aria-label="Categoría" value={form.categoryId} onChange={set} required>
               <option value="">Seleccionar</option>
@@ -227,11 +236,85 @@ function CatalogTable({ view, rows, onEdit, onDelete, busy }) {
   );
 }
 
+function movementTypeLabel(value) {
+  return value === "Entry" ? "Entrada" : "Salida";
+}
+
+function dateTimeLabel(value) {
+  return new Intl.DateTimeFormat("es-DO", { dateStyle: "short", timeStyle: "short", timeZone: "America/Santo_Domingo" }).format(new Date(value));
+}
+
+function MovementHistory({ items }) {
+  return (
+    <DataTable columns={["Fecha", "Producto", "Tipo", "Cantidad", "Descripción"]}>
+      {items.map(item => (
+        <tr key={item.id}>
+          <td>{dateTimeLabel(item.createdAt)}</td><th scope="row">{item.productName}</th>
+          <td><span className={item.movementType === "Entry" ? "badge active" : "badge"}>{movementTypeLabel(item.movementType)}</span></td>
+          <td>{item.quantity}</td><td>{item.description || "—"}</td>
+        </tr>
+      ))}
+    </DataTable>
+  );
+}
+
+function Movements({ products, items, busy, onSave }) {
+  const initial = { productId: "", movementType: "Entry", quantity: "", description: "" };
+  const [form, setForm] = useState(initial);
+  const [filter, setFilter] = useState("");
+  const set = event => setForm({ ...form, [event.target.name]: event.target.value });
+  const selected = products.find(product => product.id === Number(form.productId));
+
+  const submit = async event => {
+    event.preventDefault();
+    const saved = await onSave({ ...form, productId: Number(form.productId), quantity: Number(form.quantity) });
+    if (saved) setForm({ ...initial, productId: form.productId });
+  };
+
+  return (
+    <>
+      <form className="panel editor" onSubmit={submit}>
+        <h2>Registrar movimiento</h2>
+        <div className="form-grid">
+          <label>Producto
+            <select name="productId" aria-label="Producto" value={form.productId} onChange={set} required>
+              <option value="">Seleccionar</option>
+              {products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+          </label>
+          <label>Tipo
+            <select name="movementType" aria-label="Tipo" value={form.movementType} onChange={set}>
+              <option value="Entry">Entrada</option><option value="Exit">Salida</option>
+            </select>
+          </label>
+          <label>Cantidad<input type="number" name="quantity" min="1" max="2147483647" step="1" value={form.quantity} onChange={set} required /></label>
+          <label>Descripción<textarea name="description" aria-label="Descripción" maxLength={500} value={form.description} onChange={set} /></label>
+        </div>
+        {selected && <p>Existencias disponibles <strong>{selected.stock}</strong></p>}
+        <button className="btn primary" type="submit" disabled={busy || products.length === 0}>Registrar movimiento</button>
+      </form>
+      <section className="panel">
+        <h2>Historial de movimientos</h2>
+        <div className="filters">
+          <label>Filtrar por producto
+            <select aria-label="Filtrar por producto" value={filter} onChange={event => setFilter(event.target.value)}>
+              <option value="">Todos</option>
+              {products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <MovementHistory items={items.filter(item => !filter || item.productId === Number(filter))} />
+      </section>
+    </>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState("home");
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [movements, setMovements] = useState([]);
   const [filters, setFilters] = useState(emptyFilters);
   const [form, setForm] = useState(null);
   const [confirm, setConfirm] = useState(null);
@@ -243,12 +326,13 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [productData, categoryData, supplierData] = await Promise.all([
-        api("/products"), api("/categories"), api("/suppliers")
+      const [productData, categoryData, supplierData, movementData] = await Promise.all([
+        api("/products"), api("/categories"), api("/suppliers"), api("/stockmovements")
       ]);
       setProducts(productData);
       setCategories(categoryData);
       setSuppliers(supplierData);
+      setMovements(movementData);
     } catch (exception) {
       setError(exception.message);
     } finally {
@@ -285,7 +369,7 @@ export default function App() {
     if (view !== "suppliers") request.description = form.description;
     if (view === "products") {
       request.price = String(form.price);
-      request.stock = Number(form.stock);
+      if (!form.id) request.stock = Number(form.stock);
       request.categoryId = Number(form.categoryId);
       request.supplierId = Number(form.supplierId);
     }
@@ -324,7 +408,25 @@ export default function App() {
     }
   };
 
+  const saveMovement = async request => {
+    setMessage("");
+    setError("");
+    setBusy(true);
+    try {
+      await api("/stockmovements", { method: "POST", body: JSON.stringify(request) });
+      await loadAll();
+      setMessage("Se registró el movimiento.");
+      return true;
+    } catch (exception) {
+      setError(exception.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const records = { products, categories, suppliers };
+  const catalog = Boolean(records[view]);
   const search = filters.search.trim().toLocaleLowerCase("es-DO");
   const rows = (records[view] || []).filter(item =>
     (!search || `${item.name} ${item.description || ""} ${item.email || ""}`.toLocaleLowerCase("es-DO").includes(search)) &&
@@ -337,14 +439,15 @@ export default function App() {
     <>
       <Sidebar view={view} onView={openView} />
       <main className="app-shell">
-        <Header title={pages[view]} right={view !== "home" && !form && (
+        <Header title={pages[view]} right={catalog && !form && (
           <button className="btn primary" type="button" disabled={busy} onClick={() => openForm(null)}>Agregar {names[view]}</button>
         )} />
         {error && <div className="error" role="alert">{error}</div>}
         {loading && <p className="loading" role="status">Cargando datos…</p>}
         <Toast message={message} />
         {view === "home" && !loading && <Home products={products} categories={categories} suppliers={suppliers} />}
-        {view !== "home" && <>
+        {view === "movements" && <Movements products={products} items={movements} busy={busy} onSave={saveMovement} />}
+        {catalog && <>
           {form && <CatalogForm view={view} form={form} setForm={setForm} categories={categories} suppliers={suppliers}
             onSave={save} onCancel={() => setForm(null)} busy={busy} />}
           <section className="panel">
