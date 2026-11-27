@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="InventoryRD.API/InventoryRD.API.csproj" />
+  <Project Path="InventoryRD.Application/InventoryRD.Application.csproj" />
   <Project Path="InventoryRD.Domain/InventoryRD.Domain.csproj" />
   <Project Path="InventoryRD.Infrastructure/InventoryRD.Infrastructure.csproj" />
 </Solution>
