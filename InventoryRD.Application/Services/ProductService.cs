@@ -13,12 +13,14 @@ namespace InventoryRD.Application.Services
         private readonly IProductRepository _productRepository;
         private readonly ICategoryRepository _categoryRepository;
         private readonly ISupplierRepository _supplierRepository;
+        private readonly IStockMovementRepository _stockMovementRepository;
 
-        public ProductService(IProductRepository productRepository, ICategoryRepository categoryRepository, ISupplierRepository supplierRepository)
+        public ProductService(IProductRepository productRepository, ICategoryRepository categoryRepository, ISupplierRepository supplierRepository, IStockMovementRepository stockMovementRepository)
         {
             _productRepository = productRepository;
             _categoryRepository = categoryRepository;
             _supplierRepository = supplierRepository;
+            _stockMovementRepository = stockMovementRepository;
         }
 
         public ServiceResult<IEnumerable<ProductDto>> GetAll(string? search = null, int? categoryId = null, int? supplierId = null, bool? isActive = null)
@@ -43,6 +45,14 @@ namespace InventoryRD.Application.Services
                 Success = true,
                 Data = response
             };
+        }
+
+        public ServiceResult<IEnumerable<ProductDto>> GetLowStock()
+        {
+            var result = GetAll(isActive: true);
+            result.Data = result.Data!.Where(product => product.Stock <= 5).ToList();
+
+            return result;
         }
 
         public ServiceResult<ProductDto> GetById(int id)
@@ -101,6 +111,18 @@ namespace InventoryRD.Application.Services
             try
             {
                 _productRepository.Create(item);
+                if (item.Stock > 0)
+                {
+                    _stockMovementRepository.Create(new StockMovements
+                    {
+                        Product = item,
+                        MovementType = "Entry",
+                        Quantity = item.Stock,
+                        CreatedAt = DateTimeOffset.UtcNow,
+                        Description = "Opening stock"
+                    });
+                }
+
                 _productRepository.SaveChanges();
             }
             catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 547 })
@@ -147,10 +169,18 @@ namespace InventoryRD.Application.Services
                 };
             }
 
+            if (request.Stock.HasValue && request.Stock.Value != existing.Stock)
+            {
+                return new ServiceResult<bool>
+                {
+                    Success = false,
+                    Message = "Stock can only be changed through inventory movements."
+                };
+            }
+
             existing.Name = request.Name.Trim();
             existing.Description = request.Description?.Trim() ?? string.Empty;
             existing.Price = request.Price.GetValueOrDefault();
-            existing.Stock = request.Stock;
             existing.CategoryId = request.CategoryId;
             existing.SupplierId = request.SupplierId;
             existing.IsActive = request.IsActive;
@@ -159,6 +189,14 @@ namespace InventoryRD.Application.Services
             {
                 _productRepository.Update(existing);
                 _productRepository.SaveChanges();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new ServiceResult<bool>
+                {
+                    Success = false,
+                    Message = "The product changed during this operation. Try again."
+                };
             }
             catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 547 })
             {
@@ -187,8 +225,36 @@ namespace InventoryRD.Application.Services
                 };
             }
 
-            _productRepository.Delete(existing);
-            _productRepository.SaveChanges();
+            if (_stockMovementRepository.HasProduct(id))
+            {
+                return new ServiceResult<bool>
+                {
+                    Success = false,
+                    Message = "The product has inventory movements."
+                };
+            }
+
+            try
+            {
+                _productRepository.Delete(existing);
+                _productRepository.SaveChanges();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new ServiceResult<bool>
+                {
+                    Success = false,
+                    Message = "The product changed during this operation. Try again."
+                };
+            }
+            catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 547 })
+            {
+                return new ServiceResult<bool>
+                {
+                    Success = false,
+                    Message = "The product has inventory movements."
+                };
+            }
 
             return new ServiceResult<bool>
             {

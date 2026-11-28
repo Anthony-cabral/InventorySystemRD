@@ -23,6 +23,14 @@ namespace InventoryRD.API.Controllers
             return Ok(result.Data);
         }
 
+        [HttpGet("low-stock")]
+        public ActionResult<IEnumerable<ProductDto>> GetLowStock()
+        {
+            var result = _productService.GetLowStock();
+
+            return Ok(result.Data);
+        }
+
         [HttpGet("{id}")]
         public ActionResult<ProductDto> GetById(int id)
         {
@@ -58,6 +66,11 @@ namespace InventoryRD.API.Controllers
                     return NotFound(result.Message);
                 }
 
+                if (result.Message == "The product changed during this operation. Try again.")
+                {
+                    return Conflict(result.Message);
+                }
+
                 return BadRequest(result.Message);
             }
 
@@ -73,6 +86,11 @@ namespace InventoryRD.API.Controllers
                 if (result.Message == "The selected product was not found.")
                 {
                     return NotFound(result.Message);
+                }
+
+                if (result.Message == "The product changed during this operation. Try again.")
+                {
+                    return Conflict(result.Message);
                 }
 
                 return BadRequest(result.Message);
