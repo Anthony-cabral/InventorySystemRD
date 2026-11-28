@@ -83,6 +83,7 @@ input:not([type="checkbox"]), select, textarea {
 textarea { height: 39px; resize: vertical; }
 .checkbox { display: flex; align-items: center; gap: 8px; min-height: 39px; align-self: end; }
 .checkbox input { accent-color: var(--inventory-blue); }
+input[readonly] { background: #f2f6fa; color: var(--muted); }
 .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 9px; }
